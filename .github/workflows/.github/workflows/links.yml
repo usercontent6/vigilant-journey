@@ -1,0 +1,73 @@
+name: Refresh Download Links
+
+on:
+
+  workflow_dispatch:
+
+  schedule:
+    - cron: "30 2 * * *"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-links
+  cancel-in-progress: false
+
+jobs:
+
+  links:
+
+    runs-on: ubuntu-latest
+
+    timeout-minutes: 360
+
+    env:
+
+      PYTHONUNBUFFERED: "1"
+
+      NEON_DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
+
+    steps:
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ runner.os }}-${{ hashFiles('requirements.txt') }}
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+
+      - name: Create folders
+        run: |
+          mkdir -p logs
+          mkdir -p state
+
+      - name: Update download links
+        run: |
+          python scripts/update_links.py
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: links-logs
+          path: logs/
+
+      - name: Commit state
+        if: always()
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+
+          git add state/
+
+          git diff --cached --quiet || git commit -m "Update link state"
+
+          git push
