@@ -1,0 +1,67 @@
+name: Verify Database
+
+on:
+
+  workflow_dispatch:
+
+  schedule:
+    - cron: "0 5 * * 0"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: verify-db
+  cancel-in-progress: false
+
+jobs:
+
+  verify:
+
+    runs-on: ubuntu-latest
+
+    timeout-minutes: 120
+
+    env:
+
+      PYTHONUNBUFFERED: "1"
+
+      NEON_DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
+
+    steps:
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ runner.os }}-${{ hashFiles('requirements.txt') }}
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+
+      - name: Prepare folders
+        run: |
+          mkdir -p logs
+          mkdir -p reports
+
+      - name: Verify database
+        run: |
+          python scripts/verify.py
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: verification-report
+          path: reports/
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: verify-logs
+          path: logs/
